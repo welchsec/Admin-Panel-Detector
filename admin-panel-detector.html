@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WelchSec Admin Panel Detector</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@500;600;700&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#080b0f;--bg2:#0d1117;--border:#1e2d3d;--accent:#00ff88;--warn:#ffbe0b;--danger:#ff4757;--info:#00b4d8;--purple:#b39ddb;--muted:#3d5166;--text:#c9d1d9;--heading:#f0f6fc;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;min-height:100vh;}
+body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,255,136,.007) 3px,rgba(0,255,136,.007) 4px);pointer-events:none;z-index:999;}
+.topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:.6rem 1.5rem;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;}
+.brand{font-family:'Rajdhani',sans-serif;font-size:1.1rem;font-weight:700;color:var(--heading);}
+.brand span{color:var(--accent);}
+.topbar-right{display:flex;align-items:center;gap:1rem;font-family:'Share Tech Mono',monospace;font-size:.6rem;color:var(--muted);}
+.topbar-right a{color:var(--muted);text-decoration:none;}.topbar-right a:hover{color:var(--accent);}
+.status-led{width:7px;height:7px;border-radius:50%;background:var(--muted);}
+.status-led.scanning{background:var(--accent);box-shadow:0 0 8px var(--accent);animation:blink 1s infinite;}
+.status-led.done{background:var(--accent);box-shadow:0 0 8px var(--accent);}
+.status-led.error{background:var(--danger);box-shadow:0 0 8px var(--danger);}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+/* Mode bar */
+.mode-bar{background:var(--bg2);border-bottom:2px solid var(--border);display:flex;padding:0 1.5rem;}
+.mode-tab{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:.88rem;letter-spacing:.08em;color:var(--muted);padding:.75rem 1.25rem;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;text-transform:uppercase;}
+.mode-tab:hover{color:var(--text);}
+.mode-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+/* Layout */
+.mode-panel{display:none;}
+.mode-panel.active{display:grid;grid-template-columns:290px 1fr;min-height:calc(100vh - 88px);}
+@media(max-width:768px){.mode-panel.active{grid-template-columns:1fr;}}
+.sidebar{background:var(--bg2);border-right:1px solid var(--border);padding:1rem;display:flex;flex-direction:column;gap:.75rem;overflow-y:auto;}
+.panel{background:var(--bg);border:1px solid var(--border);padding:.85rem;position:relative;}
+.panel-label{position:absolute;top:-.5rem;left:.75rem;font-family:'Share Tech Mono',monospace;font-size:.55rem;letter-spacing:.15em;background:var(--bg);padding:0 .4rem;color:var(--accent);}
+.field{margin-bottom:.55rem;}.field:last-child{margin-bottom:0;}
+.field label{display:block;font-family:'Share Tech Mono',monospace;font-size:.55rem;color:var(--muted);letter-spacing:.1em;margin-bottom:.25rem;}
+.field input,.field select{width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.72rem;padding:.45rem .55rem;outline:none;transition:border-color .2s;}
+.field input:focus,.field select:focus{border-color:var(--accent);}
+.fn{font-family:'Share Tech Mono',monospace;font-size:.52rem;color:var(--muted);line-height:1.6;}
+.scan-btn{width:100%;background:transparent;border:2px solid var(--accent);color:var(--accent);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:.95rem;letter-spacing:.1em;padding:.6rem;cursor:pointer;text-transform:uppercase;transition:all .2s;}
+.scan-btn:hover:not(:disabled){background:var(--accent);color:var(--bg);box-shadow:0 0 20px rgba(0,255,136,.3);}
+.scan-btn:disabled{opacity:.4;cursor:not-allowed;}
+.stop-btn{width:100%;background:transparent;border:1px solid var(--danger);color:var(--danger);font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.1em;padding:.4rem;cursor:pointer;text-transform:uppercase;transition:all .2s;display:none;}
+.stop-btn:hover{background:rgba(255,71,87,.1);}
+.stop-btn.visible{display:block;}
+/* Category toggles */
+.wl-grid{display:grid;grid-template-columns:1fr 1fr;gap:.25rem;}
+.wl-item{display:flex;align-items:center;gap:.35rem;font-family:'Share Tech Mono',monospace;font-size:.58rem;color:var(--text);cursor:pointer;padding:.28rem .4rem;border:1px solid transparent;transition:all .15s;}
+.wl-item:hover{border-color:var(--border);}
+.wl-item.active{border-color:var(--accent);color:var(--accent);background:rgba(0,255,136,.05);}
+.wl-item input{display:none;}
+/* Stats */
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:.4rem;}
+.stat-box{background:var(--bg2);border:1px solid var(--border);padding:.5rem;text-align:center;}
+.stat-num{font-family:'Rajdhani',sans-serif;font-size:1.4rem;font-weight:700;line-height:1;}
+.stat-label{font-family:'Share Tech Mono',monospace;font-size:.5rem;color:var(--muted);letter-spacing:.1em;margin-top:.1rem;}
+.progress-wrap{background:var(--bg2);border:1px solid var(--border);height:3px;overflow:hidden;margin-top:.6rem;}
+.progress-bar{height:100%;background:var(--accent);width:0%;transition:width .3s;box-shadow:0 0 8px var(--accent);}
+.progress-label{font-family:'Share Tech Mono',monospace;font-size:.55rem;color:var(--muted);margin-top:.25rem;}
+/* Main */
+.main{display:flex;flex-direction:column;overflow:hidden;}
+.tabs{background:var(--bg2);border-bottom:1px solid var(--border);display:flex;padding:0 1.25rem;overflow-x:auto;}
+.tab{font-family:'Share Tech Mono',monospace;font-size:.6rem;letter-spacing:.1em;color:var(--muted);padding:.65rem .85rem;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;}
+.tab:hover{color:var(--text);}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.tab .badge{display:inline-flex;align-items:center;justify-content:center;background:var(--border);color:var(--text);font-size:.52rem;min-width:15px;height:15px;border-radius:2px;padding:0 3px;margin-left:.35rem;}
+.tab.active .badge{background:var(--accent);color:var(--bg);}
+.results-area{flex:1;overflow-y:auto;padding:.85rem 1.25rem;}
+.tab-panel{display:none;}.tab-panel.active{display:block;}
+/* Disclaimer */
+.disclaimer{background:rgba(255,71,87,.06);border:1px solid rgba(255,71,87,.25);padding:.65rem .85rem;font-family:'Share Tech Mono',monospace;font-size:.6rem;color:var(--warn);line-height:1.6;margin-bottom:.85rem;}
+/* Filter bar */
+.filter-bar{display:flex;gap:.4rem;margin-bottom:.85rem;flex-wrap:wrap;align-items:center;}
+.filter-input{background:var(--bg2);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.68rem;padding:.38rem .55rem;outline:none;flex:1;min-width:140px;}
+.filter-input:focus{border-color:var(--accent);}
+.filter-btn{font-family:'Share Tech Mono',monospace;font-size:.58rem;letter-spacing:.08em;padding:.38rem .6rem;border:1px solid var(--border);color:var(--muted);cursor:pointer;background:transparent;transition:all .15s;white-space:nowrap;}
+.filter-btn:hover,.filter-btn.on{border-color:var(--accent);color:var(--accent);background:rgba(0,255,136,.05);}
+/* Summary cards */
+.summary-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:.65rem;margin-bottom:1rem;}
+.summary-card{background:var(--bg2);border:1px solid var(--border);padding:.75rem;display:flex;align-items:center;gap:.65rem;}
+.sum-num{font-family:'Rajdhani',sans-serif;font-size:1.5rem;font-weight:700;line-height:1;}
+.sum-lbl{font-family:'Share Tech Mono',monospace;font-size:.5rem;color:var(--muted);letter-spacing:.1em;}
+/* Panel result rows */
+.panel-row{display:grid;grid-template-columns:auto 1fr auto auto auto;gap:.6rem;align-items:start;padding:.55rem .75rem;border:1px solid transparent;border-left:3px solid var(--border);margin-bottom:3px;font-family:'Share Tech Mono',monospace;font-size:.68rem;transition:all .1s;animation:fi .2s ease forwards;}
+@keyframes fi{from{opacity:0;transform:translateX(-4px)}to{opacity:1;}}
+.panel-row:hover{background:rgba(255,255,255,.02);border-color:var(--border);}
+.panel-row.found{border-left-color:var(--danger);}
+.panel-row.redirect{border-left-color:var(--warn);}
+.panel-row.maybe{border-left-color:var(--info);}
+.panel-row.notfound{border-left-color:var(--muted);opacity:.5;}
+.panel-icon{font-size:1rem;margin-top:.1rem;}
+.panel-name{color:var(--heading);font-size:.72rem;margin-bottom:.15rem;}
+.panel-url{color:var(--muted);font-size:.6rem;word-break:break-all;}
+/* Dork cards */
+.dork-cat{background:var(--bg);border:1px solid var(--border);margin-bottom:.75rem;overflow:hidden;}
+.dork-cat-header{padding:.65rem .85rem;display:flex;justify-content:space-between;align-items:center;cursor:pointer;border-bottom:1px solid transparent;transition:background .15s;}
+.dork-cat-header:hover{background:rgba(255,255,255,.02);}
+.dork-cat-header.open{border-bottom-color:var(--border);}
+.dork-cat-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:.85rem;color:var(--heading);display:flex;align-items:center;gap:.5rem;}
+.dork-cat-body{display:none;padding:.5rem;}
+.dork-cat-body.open{display:block;}
+.dork-item{display:grid;grid-template-columns:1fr auto auto;gap:.5rem;align-items:center;padding:.45rem .5rem;border-radius:2px;margin-bottom:2px;}
+.dork-item:hover{background:rgba(255,255,255,.02);}
+.dork-name{font-size:.75rem;color:var(--heading);margin-bottom:.15rem;}
+.dork-query{font-family:'Share Tech Mono',monospace;font-size:.6rem;color:var(--accent);background:rgba(0,255,136,.05);border:1px solid rgba(0,255,136,.15);padding:.2rem .45rem;word-break:break-all;margin-top:.2rem;}
+.dork-btn{font-family:'Share Tech Mono',monospace;font-size:.55rem;padding:.28rem .5rem;border:1px solid;cursor:pointer;background:transparent;transition:all .15s;white-space:nowrap;text-decoration:none;display:inline-block;}
+.dork-btn.google{color:var(--info);border-color:rgba(0,180,216,.3);}.dork-btn.google:hover{background:rgba(0,180,216,.1);}
+.dork-btn.copy{color:var(--muted);border-color:var(--border);}.dork-btn.copy:hover{color:var(--accent);border-color:rgba(0,255,136,.3);}
+.sev-badge{font-family:'Share Tech Mono',monospace;font-size:.52rem;padding:.08rem .3rem;border:1px solid;white-space:nowrap;}
+.sev-badge.critical{color:var(--danger);border-color:rgba(255,71,87,.4);background:rgba(255,71,87,.08);}
+.sev-badge.high{color:var(--warn);border-color:rgba(255,190,11,.4);background:rgba(255,190,11,.08);}
+.sev-badge.medium{color:var(--info);border-color:rgba(0,180,216,.4);background:rgba(0,180,216,.08);}
+.sev-badge.low{color:var(--accent);border-color:rgba(0,255,136,.3);}
+.status-badge{font-family:'Share Tech Mono',monospace;font-size:.55rem;padding:.1rem .35rem;border:1px solid;white-space:nowrap;}
+.status-badge.found{color:var(--danger);border-color:rgba(255,71,87,.4);background:rgba(255,71,87,.08);}
+.status-badge.redirect{color:var(--warn);border-color:rgba(255,190,11,.4);}
+.status-badge.maybe{color:var(--info);border-color:rgba(0,180,216,.3);}
+.status-badge.notfound{color:var(--muted);border-color:var(--border);}
+/* Log */
+.log-stream{background:var(--bg);border:1px solid var(--border);padding:.65rem;font-family:'Share Tech Mono',monospace;font-size:.62rem;color:var(--muted);height:calc(100vh - 250px);overflow-y:auto;line-height:1.7;}
+.log-line{display:block;}.log-line.ok{color:var(--accent);}.log-line.warn{color:var(--warn);}.log-line.err{color:var(--danger);}.log-line.info{color:var(--info);}
+/* Placeholder */
+.placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3rem 1rem;gap:.65rem;}
+.ph-icon{font-size:2.5rem;opacity:.12;}
+.ph-text{font-family:'Share Tech Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.1em;text-align:center;line-height:1.8;}
+/* Toast */
+.toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--accent);color:var(--bg);font-family:'Share Tech Mono',monospace;font-size:.7rem;padding:.5rem 1rem;z-index:1000;display:none;letter-spacing:.08em;}
+/* Col headers */
+.col-header{display:grid;gap:.5rem;padding:.28rem .75rem;font-family:'Share Tech Mono',monospace;font-size:.55rem;color:var(--muted);letter-spacing:.1em;border-bottom:1px solid var(--border);margin-bottom:.4rem;}
+::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:var(--bg);}::-webkit-scrollbar-thumb{background:var(--border);}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">Welch<span>Sec</span> // Admin Panel Detector</div>
+  <div class="topbar-right">
+    <div class="status-led" id="statusLed"></div>
+    <span id="statusText">IDLE</span>
+    <span style="color:var(--border)">|</span>
+    <a href="https://welchsec.github.io/Recon-Tool/" target="_blank">RECON ↗</a>
+    <a href="https://welchsec.github.io/Phishing-Analyzer/" target="_blank">PHISHING ↗</a>
+  </div>
+</div>
+
+<div class="mode-bar">
+  <div class="mode-tab active" id="mt-probe" onclick="switchMode('probe')">🔍 PANEL PROBE</div>
+  <div class="mode-tab" id="mt-dorks" onclick="switchMode('dorks')">🔎 GOOGLE DORKS</div>
+</div>
+
+<!-- ══════════════════════════════════════
+     MODE 1 — PANEL PROBE
+     ══════════════════════════════════════ -->
+<div class="mode-panel active" id="mode-probe">
+  <aside class="sidebar">
+    <div class="panel"><div class="panel-label">TARGET</div>
+      <div class="field"><label>TARGET DOMAIN / IP</label><input type="text" id="probe-target" placeholder="example.com or 192.168.1.1"></div>
+      <div class="field"><label>CLOUDFLARE WORKER URL</label><input type="text" id="probe-worker" placeholder="https://your-worker.workers.dev"></div>
+      <div class="field"><label>PROTOCOL</label>
+        <select id="probe-proto">
+          <option value="both" selected>Try Both (HTTPS then HTTP)</option>
+          <option value="https">HTTPS only</option>
+          <option value="http">HTTP only</option>
+        </select>
+      </div>
+    </div>
+    <div class="panel"><div class="panel-label">CATEGORIES</div>
+      <div class="wl-grid" id="probe-cats">
+        <label class="wl-item active"><input type="checkbox" value="network" checked>NETWORK</label>
+        <label class="wl-item active"><input type="checkbox" value="hosting" checked>HOSTING</label>
+        <label class="wl-item active"><input type="checkbox" value="cms" checked>CMS</label>
+        <label class="wl-item active"><input type="checkbox" value="remote" checked>REMOTE ACCESS</label>
+        <label class="wl-item active"><input type="checkbox" value="devops" checked>DEVOPS</label>
+        <label class="wl-item active"><input type="checkbox" value="database" checked>DATABASES</label>
+        <label class="wl-item active"><input type="checkbox" value="security" checked>SECURITY</label>
+        <label class="wl-item active"><input type="checkbox" value="iot" checked>IoT/CAMERAS</label>
+      </div>
+    </div>
+    <button class="scan-btn" id="probe-btn" onclick="startProbe()">▶ PROBE PANELS</button>
+    <button class="stop-btn" id="probe-stop" onclick="probeStop=true">■ STOP</button>
+    <div class="panel"><div class="panel-label">STATS</div>
+      <div class="stats-grid">
+        <div class="stat-box"><div class="stat-num" id="ps-found" style="color:var(--danger)">0</div><div class="stat-label">FOUND</div></div>
+        <div class="stat-box"><div class="stat-num" id="ps-checked" style="color:var(--info)">0</div><div class="stat-label">CHECKED</div></div>
+        <div class="stat-box"><div class="stat-num" id="ps-redirect" style="color:var(--warn)">0</div><div class="stat-label">REDIRECT</div></div>
+        <div class="stat-box"><div class="stat-num" id="ps-total" style="color:var(--muted)">0</div><div class="stat-label">TOTAL</div></div>
+      </div>
+      <div class="progress-wrap"><div class="progress-bar" id="ps-prog"></div></div>
+      <div class="progress-label" id="ps-progl">Waiting...</div>
+    </div>
+  </aside>
+  <div class="main">
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('probe','found')" id="probe-tab-found">FOUND <span class="badge" id="probe-b-found">0</span></div>
+      <div class="tab" onclick="switchTab('probe','all')" id="probe-tab-all">ALL RESULTS <span class="badge" id="probe-b-all">0</span></div>
+      <div class="tab" onclick="switchTab('probe','log')" id="probe-tab-log">LOG</div>
+    </div>
+    <div class="results-area">
+      <div class="disclaimer">⚠ Only probe targets you own or have explicit written permission to test. This tool is for authorized security auditing of your own infrastructure only.</div>
+      <div class="tab-panel active" id="probe-panel-found">
+        <div class="summary-row" id="probe-sumrow" style="display:none">
+          <div class="summary-card"><div>🚨</div><div><div class="sum-num" style="color:var(--danger)" id="probe-s-found">0</div><div class="sum-lbl">EXPOSED</div></div></div>
+          <div class="summary-card"><div>↪</div><div><div class="sum-num" style="color:var(--warn)" id="probe-s-redir">0</div><div class="sum-lbl">REDIRECT</div></div></div>
+          <div class="summary-card"><div>❓</div><div><div class="sum-num" style="color:var(--info)" id="probe-s-maybe">0</div><div class="sum-lbl">POSSIBLE</div></div></div>
+          <div class="summary-card"><div>✅</div><div><div class="sum-num" style="color:var(--muted)" id="probe-s-checked">0</div><div class="sum-lbl">CHECKED</div></div></div>
+        </div>
+        <div class="filter-bar" id="probe-fb" style="display:none">
+          <input class="filter-input" placeholder="Filter results..." oninput="probeFilter(this.value)">
+          <button class="filter-btn on" onclick="probeRF('all',this)">ALL</button>
+          <button class="filter-btn" onclick="probeRF('found',this)">FOUND</button>
+          <button class="filter-btn" onclick="probeRF('redirect',this)">REDIRECT</button>
+          <button class="filter-btn" onclick="probeRF('maybe',this)">POSSIBLE</button>
+          <button class="filter-btn" onclick="exportProbe()" style="margin-left:auto">⬇ CSV</button>
+        </div>
+        <div class="col-header" id="probe-ch" style="display:none;grid-template-columns:auto 1fr auto auto auto">
+          <span></span><span>PANEL</span><span>STATUS</span><span>HTTP</span><span>RISK</span>
+        </div>
+        <div id="probe-found-c"><div class="placeholder"><div class="ph-icon">🔐</div><div class="ph-text">ENTER YOUR TARGET DOMAIN AND CLICK PROBE<br>CHECKS 100+ KNOWN ADMIN PANEL PATHS<br>ACROSS 8 DEVICE AND SOFTWARE CATEGORIES</div></div></div>
+      </div>
+      <div class="tab-panel" id="probe-panel-all">
+        <div class="col-header" style="grid-template-columns:auto 1fr auto auto auto">
+          <span></span><span>PANEL</span><span>STATUS</span><span>HTTP</span><span>RISK</span>
+        </div>
+        <div id="probe-all-c"></div>
+      </div>
+      <div class="tab-panel" id="probe-panel-log"><div class="log-stream" id="probe-log"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     MODE 2 — GOOGLE DORKS
+     ══════════════════════════════════════ -->
+<div class="mode-panel" id="mode-dorks">
+  <aside class="sidebar">
+    <div class="panel"><div class="panel-label">TARGET</div>
+      <div class="field"><label>TARGET DOMAIN</label><input type="text" id="dork-target" placeholder="example.com"></div>
+      <div class="fn">Dork queries will be scoped to site:yourdomain.com</div>
+    </div>
+    <div class="panel"><div class="panel-label">CATEGORIES</div>
+      <div class="wl-grid" id="dork-cats">
+        <label class="wl-item active"><input type="checkbox" value="network" checked>NETWORK</label>
+        <label class="wl-item active"><input type="checkbox" value="hosting" checked>HOSTING</label>
+        <label class="wl-item active"><input type="checkbox" value="cms" checked>CMS</label>
+        <label class="wl-item active"><input type="checkbox" value="remote" checked>REMOTE ACCESS</label>
+        <label class="wl-item active"><input type="checkbox" value="devops" checked>DEVOPS</label>
+        <label class="wl-item active"><input type="checkbox" value="database" checked>DATABASES</label>
+        <label class="wl-item active"><input type="checkbox" value="security" checked>SECURITY</label>
+        <label class="wl-item active"><input type="checkbox" value="iot" checked>IoT/CAMERAS</label>
+      </div>
+    </div>
+    <button class="scan-btn" onclick="generateDorks()">▶ GENERATE DORKS</button>
+    <div class="panel"><div class="panel-label">TIPS</div>
+      <div class="fn" style="line-height:1.9">
+        • Click <span style="color:var(--info)">GOOGLE</span> to open directly<br>
+        • Click <span style="color:var(--muted)">COPY</span> to copy query<br>
+        • Results take time to appear in Google<br>
+        • No results = good — panel not indexed<br>
+        • Results found = remove from public web
+      </div>
+    </div>
+  </aside>
+  <div class="main">
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('dork','results')" id="dork-tab-results">DORK QUERIES <span class="badge" id="dork-b-results">0</span></div>
+      <div class="tab" onclick="switchTab('dork','flat')" id="dork-tab-flat">FLAT LIST <span class="badge" id="dork-b-flat">0</span></div>
+    </div>
+    <div class="results-area">
+      <div class="disclaimer">⚠ Only run dork queries against domains you own or have explicit written permission to test. Finding results means Google has indexed your admin panels — remediate immediately.</div>
+      <div class="tab-panel active" id="dork-panel-results">
+        <div id="dork-output"><div class="placeholder"><div class="ph-icon">🔎</div><div class="ph-text">ENTER YOUR DOMAIN AND CLICK GENERATE DORKS<br>CREATES TARGETED GOOGLE QUERIES TO FIND<br>YOUR EXPOSED ADMIN PANELS IN SEARCH RESULTS</div></div></div>
+      </div>
+      <div class="tab-panel" id="dork-panel-flat">
+        <div id="dork-flat-output"><div class="placeholder"><div class="ph-icon">📋</div><div class="ph-text">FLAT LIST OF ALL QUERIES APPEARS HERE</div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script defer>
+// ── Shared ────────────────────────────────────────────────────────────────────
+function switchMode(name) {
+  document.querySelectorAll('.mode-panel').forEach(m => m.classList.remove('active'));
+  document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('mode-' + name).classList.add('active');
+  document.getElementById('mt-' + name).classList.add('active');
+}
+
+function switchTab(prefix, name) {
+  document.querySelectorAll('[id^="' + prefix + '-tab-"]').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('[id^="' + prefix + '-panel-"]').forEach(p => p.classList.remove('active'));
+  const tab = document.getElementById(prefix + '-tab-' + name);
+  const panel = document.getElementById(prefix + '-panel-' + name);
+  if (tab) tab.classList.add('active');
+  if (panel) panel.classList.add('active');
+}
+
+function log(id, msg, type='') {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const span = document.createElement('span');
+  span.className = 'log-line ' + type;
+  span.textContent = '[' + new Date().toTimeString().slice(0,8) + '] ' + msg;
+  el.appendChild(document.createElement('br'));
+  el.appendChild(span);
+  el.scrollTop = el.scrollHeight;
+}
+
+function setStatus(text, state='') {
+  document.getElementById('statusText').textContent = text;
+  document.getElementById('statusLed').className = 'status-led ' + state;
+}
+
+async function wFetch(workerUrl, body) {
+  const r = await fetch(workerUrl, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+  if (!r.ok) { const e = await r.json().catch(()=>({error:r.statusText})); throw new Error(e.error||'Worker error '+r.status); }
+  const d = await r.json();
+  if (d.error) throw new Error(d.error);
+  return d;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 2000);
+}
+
+// ── Panel database ────────────────────────────────────────────────────────────
+const PANELS = {
+  network: {
+    label: 'Network Devices', icon: '🌐',
+    panels: [
+      { name:'Router Admin',       path:'/admin',                    risk:'high',   note:'Generic router admin panel' },
+      { name:'Router Login',       path:'/login',                    risk:'medium', note:'Generic login page' },
+      { name:'Cisco Router',       path:'/exec/show/version/cr',     risk:'high',   note:'Cisco IOS web interface' },
+      { name:'Cisco ASA',          path:'/+CSCOE+/logon.html',       risk:'critical',note:'Cisco ASA firewall VPN portal' },
+      { name:'pfSense',            path:'/index.php',                risk:'critical',note:'pfSense firewall dashboard' },
+      { name:'MikroTik',           path:'/winbox/',                  risk:'critical',note:'MikroTik RouterOS web interface' },
+      { name:'Ubiquiti UniFi',     path:'/manage/account/login',     risk:'high',   note:'Ubiquiti UniFi controller' },
+      { name:'Netgear Admin',      path:'/DEV_device_config.htm',    risk:'high',   note:'Netgear router admin' },
+      { name:'TP-Link Admin',      path:'/userRpm/LoginRpm.htm',     risk:'high',   note:'TP-Link router admin panel' },
+      { name:'D-Link Admin',       path:'/index.asp',                risk:'high',   note:'D-Link router interface' },
+      { name:'Linksys Admin',      path:'/setup.cgi',                risk:'high',   note:'Linksys router setup' },
+      { name:'Fortinet FortiGate', path:'/ng/login',                 risk:'critical',note:'FortiGate firewall admin' },
+      { name:'SonicWall',          path:'/auth.html',                risk:'critical',note:'SonicWall firewall login' },
+      { name:'Palo Alto',          path:'/php/login.php',            risk:'critical',note:'Palo Alto Networks firewall' },
+      { name:'CheckPoint',         path:'/Login/Login.html',         risk:'critical',note:'CheckPoint firewall admin' },
+      { name:'Juniper SRX',        path:'/dane/index.html',          risk:'critical',note:'Juniper SRX admin portal' },
+    ]
+  },
+  hosting: {
+    label: 'Web Servers & Hosting', icon: '🖥',
+    panels: [
+      { name:'cPanel',             path:'/cpanel',                   risk:'critical',note:'cPanel web hosting control panel' },
+      { name:'cPanel Alt Port',    path:':2082',                     risk:'critical',note:'cPanel on default port' },
+      { name:'WHM',                path:'/whm',                      risk:'critical',note:'WHM server management' },
+      { name:'Plesk',              path:'/plesk/',                   risk:'critical',note:'Plesk hosting control panel' },
+      { name:'Plesk Alt',          path:':8443/login_up.php',        risk:'critical',note:'Plesk on default port' },
+      { name:'DirectAdmin',        path:'/directadmin',              risk:'critical',note:'DirectAdmin control panel' },
+      { name:'Webmin',             path:':10000/',                   risk:'critical',note:'Webmin server admin' },
+      { name:'Virtualmin',         path:':10000/virtualmin/',        risk:'critical',note:'Virtualmin hosting panel' },
+      { name:'Apache Status',      path:'/server-status',            risk:'high',   note:'Apache server status page' },
+      { name:'Apache Info',        path:'/server-info',              risk:'high',   note:'Apache server info page' },
+      { name:'Nginx Status',       path:'/nginx_status',             risk:'medium', note:'Nginx status page' },
+      { name:'IIS Manager',        path:'/iisadmin/',                risk:'high',   note:'IIS web server admin' },
+      { name:'phpinfo()',          path:'/phpinfo.php',              risk:'high',   note:'PHP configuration disclosure' },
+      { name:'phpinfo alt',        path:'/info.php',                 risk:'high',   note:'PHP info page' },
+    ]
+  },
+  cms: {
+    label: 'CMS Platforms', icon: '📝',
+    panels: [
+      { name:'WordPress Admin',    path:'/wp-admin/',                risk:'critical',note:'WordPress admin dashboard' },
+      { name:'WordPress Login',    path:'/wp-login.php',             risk:'critical',note:'WordPress login page' },
+      { name:'WordPress XMLRPC',   path:'/xmlrpc.php',               risk:'high',   note:'WordPress XML-RPC (brute force vector)' },
+      { name:'Drupal Admin',       path:'/admin',                    risk:'critical',note:'Drupal admin panel' },
+      { name:'Drupal Login',       path:'/user/login',               risk:'high',   note:'Drupal user login' },
+      { name:'Joomla Admin',       path:'/administrator/',           risk:'critical',note:'Joomla admin panel' },
+      { name:'Joomla Login',       path:'/administrator/index.php',  risk:'critical',note:'Joomla admin login' },
+      { name:'Magento Admin',      path:'/admin/',                   risk:'critical',note:'Magento e-commerce admin' },
+      { name:'Magento Alt',        path:'/index.php/admin/',         risk:'critical',note:'Magento alternate admin path' },
+      { name:'Shopify Admin',      path:'/admin',                    risk:'medium', note:'Shopify store admin' },
+      { name:'Ghost Admin',        path:'/ghost/',                   risk:'high',   note:'Ghost CMS admin panel' },
+      { name:'Django Admin',       path:'/admin/',                   risk:'critical',note:'Django admin interface' },
+      { name:'Laravel Telescope',  path:'/telescope',                risk:'high',   note:'Laravel debug dashboard' },
+      { name:'TYPO3 Admin',        path:'/typo3/',                   risk:'critical',note:'TYPO3 CMS backend' },
+    ]
+  },
+  remote: {
+    label: 'Remote Access', icon: '🔒',
+    panels: [
+      { name:'Citrix Gateway',     path:'/vpn/index.html',           risk:'critical',note:'Citrix NetScaler Gateway' },
+      { name:'Citrix Alt',         path:'/Citrix/XenApp/',           risk:'critical',note:'Citrix XenApp portal' },
+      { name:'Pulse Secure VPN',   path:'/dana-na/auth/url_default/welcome.cgi', risk:'critical',note:'Pulse Secure SSL VPN' },
+      { name:'GlobalProtect VPN',  path:'/global-protect/login.esp', risk:'critical',note:'Palo Alto GlobalProtect VPN' },
+      { name:'OpenVPN Access',     path:'/admin/',                   risk:'critical',note:'OpenVPN Access Server admin' },
+      { name:'Outlook Web App',    path:'/owa/',                     risk:'high',   note:'Microsoft Outlook Web Access' },
+      { name:'OWA Alt',            path:'/exchange/',                risk:'high',   note:'Exchange webmail' },
+      { name:'RDWeb Gateway',      path:'/RDWeb/',                   risk:'critical',note:'Remote Desktop Web Gateway' },
+      { name:'VMware Horizon',     path:'/portal/',                  risk:'critical',note:'VMware Horizon View portal' },
+      { name:'Guacamole',          path:'/guacamole/',               risk:'critical',note:'Apache Guacamole remote desktop' },
+      { name:'NoMachine',          path:':4080/',                    risk:'high',   note:'NoMachine remote desktop' },
+      { name:'TeamViewer Web',     path:'/TeamViewer/',              risk:'high',   note:'TeamViewer web client' },
+    ]
+  },
+  devops: {
+    label: 'DevOps & CI/CD', icon: '⚙',
+    panels: [
+      { name:'Jenkins',            path:'/jenkins/',                 risk:'critical',note:'Jenkins CI/CD server' },
+      { name:'Jenkins Alt',        path:':8080/',                    risk:'critical',note:'Jenkins on default port' },
+      { name:'GitLab',             path:'/users/sign_in',            risk:'critical',note:'GitLab source control' },
+      { name:'Gitea',              path:'/user/login',               risk:'high',   note:'Gitea Git service' },
+      { name:'Gogs',               path:'/user/login',               risk:'high',   note:'Gogs Git service' },
+      { name:'Portainer',          path:'/#!/auth',                  risk:'critical',note:'Portainer Docker management' },
+      { name:'Portainer Alt',      path:':9000/',                    risk:'critical',note:'Portainer on default port' },
+      { name:'Kubernetes Dashboard',path:'/api/v1/namespaces/',      risk:'critical',note:'Kubernetes API endpoint' },
+      { name:'Rancher',            path:'/login',                    risk:'critical',note:'Rancher Kubernetes management' },
+      { name:'Grafana',            path:'/login',                    risk:'high',   note:'Grafana metrics dashboard' },
+      { name:'Kibana',             path:':5601/',                    risk:'critical',note:'Kibana log analytics' },
+      { name:'Prometheus',         path:':9090/',                    risk:'high',   note:'Prometheus monitoring' },
+      { name:'SonarQube',          path:'/sessions/new',             risk:'high',   note:'SonarQube code quality' },
+      { name:'Nexus Repository',   path:':8081/',                    risk:'high',   note:'Nexus artifact repository' },
+      { name:'Jira',               path:'/login.jsp',                risk:'high',   note:'Atlassian Jira issue tracker' },
+      { name:'Confluence',         path:'/login.action',             risk:'high',   note:'Atlassian Confluence wiki' },
+    ]
+  },
+  database: {
+    label: 'Databases', icon: '🗄',
+    panels: [
+      { name:'phpMyAdmin',         path:'/phpmyadmin/',              risk:'critical',note:'MySQL web admin interface' },
+      { name:'phpMyAdmin Alt',     path:'/pma/',                     risk:'critical',note:'phpMyAdmin alternate path' },
+      { name:'phpMyAdmin Alt 2',   path:'/mysql/',                   risk:'critical',note:'phpMyAdmin alternate path' },
+      { name:'Adminer',            path:'/adminer.php',              risk:'critical',note:'Adminer database manager' },
+      { name:'Adminer Alt',        path:'/adminer/',                 risk:'critical',note:'Adminer alternate path' },
+      { name:'MongoDB Express',    path:':8081/',                    risk:'critical',note:'Mongo Express web UI' },
+      { name:'Redis Commander',    path:':8081/',                    risk:'critical',note:'Redis Commander web UI' },
+      { name:'Elasticsearch',      path:':9200/',                    risk:'critical',note:'Elasticsearch REST API' },
+      { name:'CouchDB Admin',      path:':5984/_utils/',             risk:'critical',note:'CouchDB Fauxton interface' },
+      { name:'PostgreSQL Admin',   path:'/pgadmin/',                 risk:'critical',note:'pgAdmin web interface' },
+      { name:'pgAdmin Alt',        path:':5050/',                    risk:'critical',note:'pgAdmin on default port' },
+      { name:'InfluxDB',           path:':8086/',                    risk:'high',   note:'InfluxDB time-series database' },
+    ]
+  },
+  security: {
+    label: 'Security Tools', icon: '🛡',
+    panels: [
+      { name:'Snort',              path:'/snort/',                   risk:'high',   note:'Snort IDS web interface' },
+      { name:'Suricata',           path:'/suricata/',                risk:'high',   note:'Suricata IDS web interface' },
+      { name:'Wazuh',              path:':5601/',                    risk:'high',   note:'Wazuh SIEM dashboard' },
+      { name:'Splunk',             path:':8000/en-US/account/login', risk:'critical',note:'Splunk SIEM login' },
+      { name:'Splunk Alt',         path:'/en-US/account/login',      risk:'critical',note:'Splunk web interface' },
+      { name:'Graylog',            path:':9000/',                    risk:'critical',note:'Graylog log management' },
+      { name:'OSSEC',              path:'/ossec/',                   risk:'high',   note:'OSSEC HIDS web UI' },
+      { name:'Security Onion',     path:'/app/login',                risk:'critical',note:'Security Onion NSM platform' },
+      { name:'Nessus',             path:':8834/',                    risk:'critical',note:'Nessus vulnerability scanner' },
+      { name:'OpenVAS',            path:':9392/',                    risk:'critical',note:'OpenVAS vulnerability scanner' },
+      { name:'Metasploit Pro',     path:':3790/',                    risk:'critical',note:'Metasploit Pro web UI' },
+      { name:'Burp Suite Pro',     path:':1337/',                    risk:'critical',note:'Burp Suite collaborator' },
+      { name:'Qualys',             path:'/fo/login.php',             risk:'high',   note:'Qualys vulnerability management' },
+    ]
+  },
+  iot: {
+    label: 'IoT & Cameras', icon: '📷',
+    panels: [
+      { name:'IP Camera (generic)', path:'/view.shtml',              risk:'critical',note:'Generic IP camera live view' },
+      { name:'Hikvision Camera',   path:'/doc/page/login.asp',       risk:'critical',note:'Hikvision IP camera admin' },
+      { name:'Dahua Camera',       path:'/RPC2_Login',               risk:'critical',note:'Dahua IP camera login' },
+      { name:'Axis Camera',        path:'/view/viewer_index.shtml',  risk:'critical',note:'Axis network camera' },
+      { name:'Amcrest Camera',     path:'/web/',                     risk:'critical',note:'Amcrest IP camera web UI' },
+      { name:'Reolink Camera',     path:'/cgi-bin/api.cgi',          risk:'high',   note:'Reolink camera API' },
+      { name:'Foscam Camera',      path:'/cgi-bin/CGIProxy.fcgi',    risk:'critical',note:'Foscam IP camera' },
+      { name:'DVR/NVR Login',      path:'/doc/page/login.asp',       risk:'critical',note:'Generic DVR/NVR login page' },
+      { name:'NVR Web Interface',  path:'/PSIA/System/deviceInfo',   risk:'critical',note:'Network Video Recorder API' },
+      { name:'Building Management',path:'/bms/',                     risk:'critical',note:'Building Management System' },
+      { name:'BACnet Interface',   path:'/bacnet/',                  risk:'critical',note:'BACnet building automation' },
+      { name:'SCADA HMI',          path:'/webscada/',                risk:'critical',note:'SCADA web HMI interface' },
+      { name:'Honeywell BMS',      path:'/Login.aspx',               risk:'critical',note:'Honeywell building controller' },
+      { name:'Printer Admin',      path:'/hp/device/info',           risk:'medium', note:'HP printer web interface' },
+      { name:'Printer Status',     path:'/DevMgmt/ProductUsageDyn.xml', risk:'medium',note:'Printer device management' },
+    ]
+  }
+};
+
+// ════════════════════════════════════════════════════════
+// MODE 1 — PANEL PROBE
+// ════════════════════════════════════════════════════════
+let probeStop = false;
+let probeResults = [];
+let probeCounts = { found:0, redirect:0, maybe:0, notfound:0 };
+let probeRiskFilter = 'all';
+
+function panelRowHTML(r) {
+  const statusClass = r.status==='found'?'found':r.status==='redirect'?'redirect':r.status==='maybe'?'maybe':'notfound';
+  const statusLabel = r.status==='found'?'EXPOSED':r.status==='redirect'?'REDIRECT':r.status==='maybe'?'POSSIBLE':'NOT FOUND';
+  const httpColor = r.httpStatus===200?'var(--danger)':r.httpStatus>=300&&r.httpStatus<400?'var(--warn)':r.httpStatus===401||r.httpStatus===403?'var(--info)':'var(--muted)';
+  return '<div class="panel-row ' + statusClass + '" data-status="' + r.status + '" data-name="' + r.name.toLowerCase() + '">' +
+    '<div class="panel-icon">' + r.icon + '</div>' +
+    '<div><div class="panel-name">' + r.name + '</div><div class="panel-url"><a href="' + r.url + '" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">' + r.url + '</a></div>' +
+    (r.note ? '<div style="font-size:.58rem;color:var(--muted);margin-top:.1rem">' + r.note + '</div>' : '') +
+    '</div>' +
+    '<span class="status-badge ' + statusClass + '">' + statusLabel + '</span>' +
+    '<span style="font-family:\'Share Tech Mono\',monospace;font-size:.65rem;color:' + httpColor + '">' + (r.httpStatus||'—') + '</span>' +
+    '<span class="sev-badge ' + r.risk + '">' + r.risk.toUpperCase() + '</span>' +
+    '</div>';
+}
+
+async function startProbe() {
+  const target = document.getElementById('probe-target').value.trim().replace(/^https?:\/\//,'').replace(/\/.*/,'');
+  const workerUrl = document.getElementById('probe-worker').value.trim();
+  const proto = document.getElementById('probe-proto').value;
+  if (!target) { alert('Enter a target domain or IP'); return; }
+  if (!workerUrl) { alert('Enter your Cloudflare Worker URL'); return; }
+
+  const selectedCats = [...document.querySelectorAll('#probe-cats .wl-item.active input')].map(i=>i.value);
+  if (!selectedCats.length) { alert('Select at least one category'); return; }
+
+  probeStop = false; probeResults = []; probeCounts = {found:0,redirect:0,maybe:0,notfound:0};
+  document.getElementById('probe-found-c').innerHTML = '<div class="placeholder"><div class="ph-icon">⏳</div><div class="ph-text">PROBING PANELS...</div></div>';
+  document.getElementById('probe-all-c').innerHTML = '';
+  document.getElementById('probe-sumrow').style.display = 'none';
+  document.getElementById('probe-fb').style.display = 'none';
+  document.getElementById('probe-ch').style.display = 'none';
+  document.getElementById('probe-log').innerHTML = '';
+  document.getElementById('probe-btn').disabled = true;
+  document.getElementById('probe-stop').className = 'stop-btn visible';
+  setStatus('PROBING ' + target, 'scanning');
+
+  // Build full panel list from selected categories
+  const allPanels = [];
+  selectedCats.forEach(cat => {
+    const data = PANELS[cat];
+    if (!data) return;
+    data.panels.forEach(p => {
+      // Build URLs to try
+      const protocols = proto === 'both' ? ['https', 'http'] : [proto];
+      protocols.forEach(scheme => {
+        let url;
+        if (p.path.startsWith(':')) {
+          url = scheme + '://' + target + p.path;
+        } else {
+          url = scheme + '://' + target + p.path;
+        }
+        allPanels.push({ ...p, url, icon: data.icon, cat, scheme });
+      });
+    });
+  });
+
+  // Deduplicate if both protocols
+  const seen = new Set();
+  const uniquePanels = allPanels.filter(p => {
+    if (seen.has(p.name + p.path)) return false;
+    seen.add(p.name + p.path);
+    return true;
+  });
+
+  document.getElementById('ps-total').textContent = uniquePanels.length;
+  log('probe-log', 'Target: ' + target, 'info');
+  log('probe-log', 'Probing ' + uniquePanels.length + ' panel paths...', 'info');
+
+  let checked = 0;
+
+  // Process in batches of 5
+  for (let i = 0; i < uniquePanels.length && !probeStop; i++) {
+    const panel = uniquePanels[i];
+    try {
+      const data = await wFetch(workerUrl, { action: 'probe', url: panel.url });
+      const httpStatus = data.status || 0;
+      let status = 'notfound';
+
+      if (httpStatus === 200) status = 'found';
+      else if (httpStatus === 401 || httpStatus === 403) status = 'maybe';
+      else if (httpStatus >= 301 && httpStatus <= 308) status = 'redirect';
+
+      const result = { ...panel, httpStatus, status };
+      checked++;
+      probeCounts[status]++;
+
+      // Add to all tab
+      document.getElementById('probe-all-c').insertAdjacentHTML('beforeend', panelRowHTML(result));
+
+      // Add to found tab if not 404
+      if (status !== 'notfound') {
+        probeResults.push(result);
+        const fc = document.getElementById('probe-found-c');
+        if (fc.querySelector('.placeholder')) {
+          fc.innerHTML = '';
+          document.getElementById('probe-sumrow').style.display = '';
+          document.getElementById('probe-fb').style.display = '';
+          document.getElementById('probe-ch').style.display = '';
+        }
+        fc.insertAdjacentHTML('beforeend', panelRowHTML(result));
+
+        if (status === 'found') log('probe-log', '[EXPOSED] ' + panel.name + ' — ' + panel.url, 'err');
+        else if (status === 'maybe') log('probe-log', '[POSSIBLE] ' + panel.name + ' — HTTP ' + httpStatus, 'warn');
+        else if (status === 'redirect') log('probe-log', '[REDIRECT] ' + panel.name + ' — HTTP ' + httpStatus, 'warn');
+      }
+
+      // Update stats
+      document.getElementById('ps-found').textContent = probeCounts.found;
+      document.getElementById('ps-redirect').textContent = probeCounts.redirect;
+      document.getElementById('ps-checked').textContent = checked;
+      document.getElementById('probe-s-found').textContent = probeCounts.found;
+      document.getElementById('probe-s-redir').textContent = probeCounts.redirect;
+      document.getElementById('probe-s-maybe').textContent = probeCounts.maybe;
+      document.getElementById('probe-s-checked').textContent = checked;
+      document.getElementById('probe-b-found').textContent = probeResults.length;
+      document.getElementById('probe-b-all').textContent = checked;
+      const pct = Math.round((checked / uniquePanels.length) * 100);
+      document.getElementById('ps-prog').style.width = pct + '%';
+      document.getElementById('ps-progl').textContent = checked + ' / ' + uniquePanels.length;
+
+    } catch(e) {
+      checked++;
+    }
+
+    // Yield every 10 requests
+    if (i % 10 === 0) await new Promise(r => setTimeout(r, 0));
+  }
+
+  document.getElementById('probe-btn').disabled = false;
+  document.getElementById('probe-stop').className = 'stop-btn';
+  setStatus(probeStop ? 'STOPPED' : 'COMPLETE — ' + probeCounts.found + ' exposed, ' + probeCounts.maybe + ' possible', probeStop ? 'error' : 'done');
+  log('probe-log', (probeStop?'Stopped.':'Done.') + ' Found: ' + probeCounts.found + ' exposed, ' + probeCounts.maybe + ' possible, ' + probeCounts.redirect + ' redirects', probeCounts.found > 0 ? 'err' : 'ok');
+}
+
+function probeFilter(text) {
+  document.querySelectorAll('#probe-found-c .panel-row').forEach(r => {
+    const matchText = !text || r.dataset.name.includes(text.toLowerCase());
+    const matchStatus = probeRiskFilter === 'all' || r.dataset.status === probeRiskFilter;
+    r.style.display = matchText && matchStatus ? '' : 'none';
+  });
+}
+
+function probeRF(s, btn) {
+  probeRiskFilter = s;
+  document.querySelectorAll('#probe-fb .filter-btn').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  probeFilter('');
+}
+
+function exportProbe() {
+  if (!probeResults.length) return;
+  let csv = 'Panel,URL,Status,HTTP Status,Risk,Notes\n';
+  probeResults.forEach(r => csv += '"'+r.name+'","'+r.url+'","'+r.status+'",'+r.httpStatus+',"'+r.risk+'","'+r.note+'"\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download = 'admin_panels_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.style.display='none'; document.body.appendChild(a); a.click();
+  setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(a.href);},1000);
+}
+
+document.querySelectorAll('#probe-cats .wl-item').forEach(item => {
+  item.addEventListener('click', () => {
+    item.classList.toggle('active');
+    item.querySelector('input').checked = item.classList.contains('active');
+  });
+});
+
+// ════════════════════════════════════════════════════════
+// MODE 2 — GOOGLE DORKS
+// ════════════════════════════════════════════════════════
+const PANEL_DORKS = {
+  network: { label:'Network Devices', icon:'🌐', dorks:[
+    { name:'Router Admin Panels',   query:'site:{d} intitle:"router" OR intitle:"gateway" intext:"login"', risk:'high' },
+    { name:'Firewall Login Pages',  query:'site:{d} intitle:"firewall" intext:"username" intext:"password"', risk:'critical' },
+    { name:'Cisco WebUI',           query:'site:{d} inurl:"/exec/show" OR inurl:"+CSCOE+"', risk:'critical' },
+    { name:'pfSense Panels',        query:'site:{d} intitle:"pfSense" intext:"login"', risk:'critical' },
+    { name:'Fortinet Admin',        query:'site:{d} intitle:"FortiGate" OR intitle:"FortiOS"', risk:'critical' },
+    { name:'Network Switch Admin',  query:'site:{d} intitle:"switch" intext:"management" intext:"login"', risk:'high' },
+  ]},
+  hosting: { label:'Web Servers & Hosting', icon:'🖥', dorks:[
+    { name:'cPanel Instances',      query:'site:{d} inurl:"/cpanel" OR inurl:":2082"', risk:'critical' },
+    { name:'Plesk Panels',          query:'site:{d} inurl:"/plesk" OR intitle:"Plesk"', risk:'critical' },
+    { name:'Webmin Interfaces',     query:'site:{d} inurl:":10000" intitle:"Webmin"', risk:'critical' },
+    { name:'Apache Server Status',  query:'site:{d} inurl:"server-status" intitle:"Apache Status"', risk:'high' },
+    { name:'phpinfo Pages',         query:'site:{d} intitle:"phpinfo()" intext:"PHP Version"', risk:'high' },
+    { name:'WHM Panels',            query:'site:{d} inurl:"/whm" OR intitle:"WHM"', risk:'critical' },
+  ]},
+  cms: { label:'CMS Platforms', icon:'📝', dorks:[
+    { name:'WordPress Admin',       query:'site:{d} inurl:"/wp-admin" OR inurl:"/wp-login.php"', risk:'critical' },
+    { name:'Joomla Admin',          query:'site:{d} inurl:"/administrator/" intitle:"Joomla"', risk:'critical' },
+    { name:'Drupal Admin',          query:'site:{d} inurl:"/user/login" intitle:"Drupal"', risk:'critical' },
+    { name:'Magento Admin',         query:'site:{d} inurl:"/admin" intitle:"Magento"', risk:'critical' },
+    { name:'Django Admin',          query:'site:{d} inurl:"/admin/" intitle:"Django site admin"', risk:'critical' },
+    { name:'Ghost CMS',             query:'site:{d} inurl:"/ghost/" intitle:"Ghost"', risk:'high' },
+  ]},
+  remote: { label:'Remote Access', icon:'🔒', dorks:[
+    { name:'VPN Login Portals',     query:'site:{d} intitle:"VPN" intext:"login" OR intext:"sign in"', risk:'critical' },
+    { name:'Citrix Gateways',       query:'site:{d} intitle:"Citrix Gateway" OR inurl:"/vpn/index.html"', risk:'critical' },
+    { name:'Outlook Web Access',    query:'site:{d} inurl:"/owa/" intitle:"Outlook"', risk:'high' },
+    { name:'RDWeb Portals',         query:'site:{d} inurl:"/RDWeb/" intitle:"Remote Desktop"', risk:'critical' },
+    { name:'Pulse Secure VPN',      query:'site:{d} intitle:"Pulse Secure" intext:"login"', risk:'critical' },
+    { name:'Remote Admin Panels',   query:'site:{d} intitle:"Remote Management" intext:"login"', risk:'high' },
+  ]},
+  devops: { label:'DevOps & CI/CD', icon:'⚙', dorks:[
+    { name:'Jenkins Servers',       query:'site:{d} intitle:"Dashboard [Jenkins]" OR inurl:"/jenkins/"', risk:'critical' },
+    { name:'GitLab Instances',      query:'site:{d} intitle:"GitLab" intext:"sign in"', risk:'critical' },
+    { name:'Portainer Docker',      query:'site:{d} intitle:"Portainer" intext:"login"', risk:'critical' },
+    { name:'Grafana Dashboards',    query:'site:{d} intitle:"Grafana" intext:"login"', risk:'high' },
+    { name:'Kibana Panels',         query:'site:{d} intitle:"Kibana" OR inurl:":5601"', risk:'critical' },
+    { name:'Jira/Confluence',       query:'site:{d} intitle:"Log In - Jira" OR intitle:"Log In - Confluence"', risk:'high' },
+  ]},
+  database: { label:'Databases', icon:'🗄', dorks:[
+    { name:'phpMyAdmin',            query:'site:{d} inurl:"/phpmyadmin/" OR inurl:"/pma/"', risk:'critical' },
+    { name:'Adminer Panels',        query:'site:{d} inurl:"/adminer.php" OR intitle:"Adminer"', risk:'critical' },
+    { name:'MongoDB Express',       query:'site:{d} intitle:"mongo-express" OR intitle:"MongoDB"', risk:'critical' },
+    { name:'Elasticsearch',         query:'site:{d} inurl:":9200" intitle:"Elasticsearch"', risk:'critical' },
+    { name:'pgAdmin',               query:'site:{d} inurl:"/pgadmin" OR intitle:"pgAdmin"', risk:'critical' },
+    { name:'Database Login Pages',  query:'site:{d} intitle:"database" intext:"username" intext:"password"', risk:'high' },
+  ]},
+  security: { label:'Security Tools', icon:'🛡', dorks:[
+    { name:'Splunk SIEM',           query:'site:{d} intitle:"Splunk" intext:"login" OR inurl:":8000"', risk:'critical' },
+    { name:'Nessus Scanner',        query:'site:{d} intitle:"Nessus" intext:"login"', risk:'critical' },
+    { name:'OpenVAS Scanner',       query:'site:{d} intitle:"OpenVAS" intext:"login"', risk:'critical' },
+    { name:'Graylog Instances',     query:'site:{d} intitle:"Graylog" intext:"sign in"', risk:'critical' },
+    { name:'Security Dashboards',   query:'site:{d} intitle:"Security Operations" intext:"login"', risk:'high' },
+    { name:'WAF Admin Panels',      query:'site:{d} intitle:"Web Application Firewall" intext:"admin"', risk:'high' },
+  ]},
+  iot: { label:'IoT & Cameras', icon:'📷', dorks:[
+    { name:'IP Camera Feeds',       query:'site:{d} inurl:"view.shtml" OR intitle:"Network Camera"', risk:'critical' },
+    { name:'Hikvision Cameras',     query:'site:{d} inurl:"/doc/page/login.asp"', risk:'critical' },
+    { name:'DVR/NVR Systems',       query:'site:{d} intitle:"DVR" OR intitle:"NVR" intext:"login"', risk:'critical' },
+    { name:'Building Management',   query:'site:{d} intitle:"BMS" OR intitle:"Building Management"', risk:'critical' },
+    { name:'SCADA Interfaces',      query:'site:{d} intitle:"SCADA" OR intitle:"HMI" intext:"login"', risk:'critical' },
+    { name:'Printer Interfaces',    query:'site:{d} intitle:"HP LaserJet" OR intitle:"Printer Status"', risk:'medium' },
+  ]}
+};
+
+function generateDorks() {
+  const domain = document.getElementById('dork-target').value.trim().replace(/^https?:\/\//,'').replace(/\/.*/,'');
+  if (!domain) { alert('Enter a target domain'); return; }
+  const selected = [...document.querySelectorAll('#dork-cats .wl-item.active input')].map(i=>i.value);
+  if (!selected.length) { alert('Select at least one category'); return; }
+
+  let totalDorks = 0;
+  const allFlat = [];
+
+  const catHTML = selected.map(cat => {
+    const data = PANEL_DORKS[cat];
+    if (!data) return '';
+    const dorks = data.dorks;
+    totalDorks += dorks.length;
+    const dorksHTML = dorks.map(d => {
+      const query = d.query.replace(/\{d\}/g, domain);
+      const googleUrl = 'https://www.google.com/search?q=' + encodeURIComponent(query);
+      allFlat.push({ cat: data.label, name: d.name, query, risk: d.risk, googleUrl });
+      return '<div class="dork-item">' +
+        '<div><div class="dork-name">' + d.name + '</div><div class="dork-query">' + query + '</div></div>' +
+        '<span class="sev-badge ' + d.risk + '">' + d.risk.toUpperCase() + '</span>' +
+        '<div style="display:flex;flex-direction:column;gap:.25rem">' +
+        '<a class="dork-btn google" href="' + googleUrl + '" target="_blank" rel="noopener">🔍 GOOGLE</a>' +
+        '<button class="dork-btn copy" onclick="copyText(\'' + query.replace(/'/g, "\\'") + '\')">📋 COPY</button>' +
+        '</div></div>';
+    }).join('');
+    return '<div class="dork-cat">' +
+      '<div class="dork-cat-header" onclick="toggleCat(this)">' +
+      '<div class="dork-cat-title">' + data.icon + ' ' + data.label + '</div>' +
+      '<span style="font-family:\'Share Tech Mono\',monospace;font-size:.58rem;color:var(--muted)">' + dorks.length + ' QUERIES ▼</span>' +
+      '</div>' +
+      '<div class="dork-cat-body">' + dorksHTML + '</div>' +
+      '</div>';
+  }).join('');
+
+  document.getElementById('dork-output').innerHTML =
+    '<div style="display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center">' +
+    '<span style="font-family:\'Share Tech Mono\',monospace;font-size:.65rem;color:var(--muted)">' + totalDorks + ' queries for ' + domain + '</span>' +
+    '<button class="filter-btn" onclick="expandAll()" style="margin-left:auto">▼ EXPAND ALL</button>' +
+    '<button class="filter-btn" onclick="collapseAll()">▲ COLLAPSE ALL</button>' +
+    '<button class="filter-btn" onclick="copyAllDorks()" style="color:var(--accent);border-color:rgba(0,255,136,.3)">📋 COPY ALL</button>' +
+    '</div>' + catHTML;
+
+  // Flat list
+  document.getElementById('dork-flat-output').innerHTML = allFlat.map(d =>
+    '<div class="panel-row" style="grid-template-columns:1fr auto auto;gap:.5rem">' +
+    '<div><div style="font-size:.72rem;color:var(--heading);margin-bottom:.15rem">' + d.name + ' <span style="color:var(--muted);font-size:.6rem">— ' + d.cat + '</span></div>' +
+    '<div style="font-family:\'Share Tech Mono\',monospace;font-size:.6rem;color:var(--accent)">' + d.query + '</div></div>' +
+    '<span class="sev-badge ' + d.risk + '">' + d.risk.toUpperCase() + '</span>' +
+    '<a class="dork-btn google" href="' + d.googleUrl + '" target="_blank" rel="noopener">🔍</a>' +
+    '</div>'
+  ).join('');
+
+  document.getElementById('dork-b-results').textContent = totalDorks;
+  document.getElementById('dork-b-flat').textContent = totalDorks;
+  window._dorkFlat = allFlat;
+  setStatus('GENERATED — ' + totalDorks + ' dork queries for ' + domain, 'done');
+}
+
+function toggleCat(header) {
+  const body = header.nextElementSibling;
+  body.classList.toggle('open');
+  header.classList.toggle('open');
+  const toggle = header.querySelector('span:last-child');
+  if (toggle) toggle.textContent = body.classList.contains('open') ?
+    toggle.textContent.replace('▼','▲') : toggle.textContent.replace('▲','▼');
+}
+
+function expandAll() {
+  document.querySelectorAll('.dork-cat-body').forEach(b => b.classList.add('open'));
+}
+
+function collapseAll() {
+  document.querySelectorAll('.dork-cat-body').forEach(b => b.classList.remove('open'));
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(() => showToast('Copied!')).catch(()=>{});
+}
+
+function copyAllDorks() {
+  if (!window._dorkFlat) return;
+  const text = window._dorkFlat.map(d => d.query).join('\n');
+  navigator.clipboard.writeText(text).then(() => showToast('All ' + window._dorkFlat.length + ' queries copied!')).catch(()=>{});
+}
+
+document.querySelectorAll('#dork-cats .wl-item').forEach(item => {
+  item.addEventListener('click', () => {
+    item.classList.toggle('active');
+    item.querySelector('input').checked = item.classList.contains('active');
+  });
+});
+</script>
+</body>
+</html>
